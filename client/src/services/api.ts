@@ -501,3 +501,29 @@ export const users = {
     return request<User>(`/users/${userId}`);
   },
 };
+
+// ------------------------------------------------------------------ //
+//  Import                                                              //
+// ------------------------------------------------------------------ //
+
+export interface TrelloImportResult {
+  message: string;
+  boardId: string;
+  boardName: string;
+  summary: {
+    lists: number;
+    cards: number;
+    skippedCards: number;
+    labels: number;
+    checklists: number;
+  };
+}
+
+export const importApi = {
+  trello(data: any): Promise<TrelloImportResult> {
+    return request<TrelloImportResult>('/import/trello', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};

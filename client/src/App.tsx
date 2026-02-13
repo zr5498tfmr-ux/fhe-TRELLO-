@@ -6,6 +6,7 @@ import Header from './components/Header';
 import BoardList from './components/BoardList';
 import BoardView from './components/BoardView';
 import EmailRulesPage from './components/EmailRulesPage';
+import ImportPage from './components/ImportPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -108,6 +109,16 @@ function App() {
                   <EmailRulesPage />
                 </AppLayout>
               </AdminRoute>
+            }
+          />
+          <Route
+            path="/import"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ImportPage />
+                </AppLayout>
+              </ProtectedRoute>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

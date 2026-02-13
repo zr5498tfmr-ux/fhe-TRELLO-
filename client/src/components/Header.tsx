@@ -277,6 +277,19 @@ export default function Header() {
           Boards
         </Link>
 
+        <Link
+          to="/import"
+          style={styles.navLink}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          Import
+        </Link>
+
         {user?.role === 'admin' && (
           <Link
             to="/email-rules"
