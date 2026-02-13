@@ -117,6 +117,65 @@ async function getCardAndVerifyAccess(cardId: string, userId: string) {
 router.use(authenticate);
 
 // ------------------------------------------------------------------ //
+//  GET /search  -  search cards across all boards the user can access //
+// ------------------------------------------------------------------ //
+
+router.get(
+  '/search',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const q = (req.query.q as string || '').trim();
+      if (!q) {
+        res.json([]);
+        return;
+      }
+
+      const searchPattern = `%${q}%`;
+
+      const result = await query(
+        `SELECT c.id, c.list_id, c.title, c.description, c.position,
+                c.due_date, c.cover_color, c.is_archived, c.created_by,
+                c.created_at, c.updated_at,
+                l.title AS list_title, l.board_id,
+                b.title AS board_title, b.background_color
+         FROM cards c
+         JOIN lists l ON l.id = c.list_id
+         JOIN boards b ON b.id = l.board_id
+         JOIN board_members bm ON bm.board_id = b.id
+         WHERE bm.user_id = $1
+           AND b.is_archived = false
+           AND (c.title ILIKE $2 OR c.description ILIKE $2)
+         ORDER BY c.updated_at DESC
+         LIMIT 25`,
+        [req.user!.id, searchPattern],
+      );
+
+      const cards = result.rows.map((c) => ({
+        id: c.id,
+        listId: c.list_id,
+        title: c.title,
+        description: c.description,
+        position: c.position,
+        dueDate: c.due_date,
+        coverColor: c.cover_color,
+        isArchived: c.is_archived,
+        createdBy: c.created_by,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        listTitle: c.list_title,
+        boardId: c.board_id,
+        boardTitle: c.board_title,
+        boardBackgroundColor: c.background_color,
+      }));
+
+      res.json(cards);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ------------------------------------------------------------------ //
 //  POST /  -  create a card                                           //
 // ------------------------------------------------------------------ //
 
@@ -483,6 +542,40 @@ router.delete(
       );
 
       res.json({ message: 'Card archived successfully' });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ------------------------------------------------------------------ //
+//  PUT /:cardId/restore  -  restore an archived card                  //
+// ------------------------------------------------------------------ //
+
+router.put(
+  '/:cardId/restore',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { cardId } = req.params;
+
+      await getCardAndVerifyAccess(cardId, req.user!.id);
+
+      // Place the card at the end of its list
+      const card = (await query('SELECT list_id FROM cards WHERE id = $1', [cardId])).rows[0];
+
+      const posResult = await query(
+        `SELECT COALESCE(MAX(position), -1) + 1 AS next_pos
+         FROM cards
+         WHERE list_id = $1 AND is_archived = false`,
+        [card.list_id],
+      );
+
+      await query(
+        'UPDATE cards SET is_archived = false, position = $1 WHERE id = $2',
+        [posResult.rows[0].next_pos, cardId],
+      );
+
+      res.json({ message: 'Card restored successfully' });
     } catch (err) {
       next(err);
     }

@@ -175,6 +175,10 @@ export const boards = {
     });
   },
 
+  getArchivedCards(boardId: string): Promise<any[]> {
+    return request<any[]>(`/boards/${boardId}/archived-cards`);
+  },
+
   addMember(
     boardId: string,
     data: { userId: string; role?: 'admin' | 'member' | 'viewer' },
@@ -278,6 +282,16 @@ export const cards = {
     return request<{ message: string }>(`/cards/${cardId}`, {
       method: 'DELETE',
     });
+  },
+
+  restore(cardId: string): Promise<{ message: string }> {
+    return request<{ message: string }>(`/cards/${cardId}/restore`, {
+      method: 'PUT',
+    });
+  },
+
+  search(q: string): Promise<any[]> {
+    return request<any[]>(`/cards/search?q=${encodeURIComponent(q)}`);
   },
 
   addLabel(cardId: string, labelId: string): Promise<{ cardId: string; labelId: string; name: string; color: string }> {

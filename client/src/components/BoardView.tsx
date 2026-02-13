@@ -19,6 +19,171 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { boards as boardsApi, lists as listsApi, cards as cardsApi } from '../services/api';
+
+// ------------------------------------------------------------------ //
+//  Archive Panel                                                       //
+// ------------------------------------------------------------------ //
+
+interface ArchivePanelProps {
+  boardId: string;
+  onRestore: (cardId: string) => void;
+  onClose: () => void;
+}
+
+function ArchivePanel({ boardId, onRestore, onClose }: ArchivePanelProps) {
+  const [archivedCards, setArchivedCards] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchArchived = async () => {
+      try {
+        const data = await boardsApi.getArchivedCards(boardId);
+        setArchivedCards(data);
+      } catch {
+        setArchivedCards([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchArchived();
+  }, [boardId]);
+
+  const handleRestore = async (cardId: string) => {
+    try {
+      await cardsApi.restore(cardId);
+      setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
+      onRestore(cardId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const panelStyles: Record<string, React.CSSProperties> = {
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: 340,
+      background: '#fff',
+      boxShadow: '-4px 0 16px rgba(0,0,0,0.2)',
+      zIndex: 900,
+      display: 'flex',
+      flexDirection: 'column',
+    },
+    header: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '14px 16px',
+      borderBottom: '1px solid #e0e0e0',
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#172B4D',
+    },
+    closeBtn: {
+      background: 'none',
+      border: 'none',
+      fontSize: 20,
+      cursor: 'pointer',
+      color: '#5E6C84',
+      lineHeight: 1,
+      padding: '2px 6px',
+    },
+    body: {
+      flex: 1,
+      overflowY: 'auto',
+      padding: '8px 12px',
+    },
+    card: {
+      background: '#F4F5F7',
+      borderRadius: 6,
+      padding: '10px 12px',
+      marginBottom: 8,
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    cardInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cardTitle: {
+      fontSize: 14,
+      fontWeight: 500,
+      color: '#172B4D',
+      wordBreak: 'break-word' as const,
+    },
+    cardMeta: {
+      fontSize: 11,
+      color: '#5E6C84',
+      marginTop: 2,
+    },
+    restoreBtn: {
+      background: '#0079BF',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 4,
+      padding: '5px 10px',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap' as const,
+      flexShrink: 0,
+    },
+    emptyMsg: {
+      textAlign: 'center' as const,
+      color: '#5E6C84',
+      fontSize: 13,
+      padding: '40px 16px',
+    },
+  };
+
+  return (
+    <div style={panelStyles.overlay}>
+      <div style={panelStyles.header}>
+        <div style={panelStyles.title}>Archived Cards</div>
+        <button style={panelStyles.closeBtn} onClick={onClose}>&times;</button>
+      </div>
+      <div style={panelStyles.body}>
+        {loading ? (
+          <div style={panelStyles.emptyMsg}>Loading...</div>
+        ) : archivedCards.length === 0 ? (
+          <div style={panelStyles.emptyMsg}>No archived cards</div>
+        ) : (
+          archivedCards.map((card) => (
+            <div key={card.id} style={panelStyles.card}>
+              <div style={panelStyles.cardInfo}>
+                <div style={panelStyles.cardTitle}>{card.title}</div>
+                <div style={panelStyles.cardMeta}>
+                  {card.listTitle && <>from: {card.listTitle}</>}
+                  {card.updatedAt && (
+                    <> &middot; {new Date(card.updatedAt).toLocaleDateString()}</>
+                  )}
+                </div>
+              </div>
+              <button
+                style={panelStyles.restoreBtn}
+                onClick={() => handleRestore(card.id)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#026AA7';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#0079BF';
+                }}
+              >
+                Restore
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 import type { Board, List, Card } from '../types';
 import CardDetail from './CardDetail';
 
@@ -496,6 +661,9 @@ export default function BoardView() {
   const [addingList, setAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
 
+  // Archive panel state
+  const [showArchive, setShowArchive] = useState(false);
+
   // Active drag item
   const [activeCard, setActiveCard] = useState<Card | null>(null);
 
@@ -780,6 +948,11 @@ export default function BoardView() {
     [],
   );
 
+  const handleArchiveRestore = useCallback(() => {
+    // Re-fetch the board to pick up the restored card
+    fetchBoard();
+  }, [fetchBoard]);
+
   // ---------------------------------------------------------------- //
   //  Styles                                                            //
   // ---------------------------------------------------------------- //
@@ -854,6 +1027,19 @@ export default function BoardView() {
       borderRadius: 8,
       padding: 8,
     },
+    archiveBtn: {
+      background: 'rgba(255,255,255,0.2)',
+      border: 'none',
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: 500,
+      padding: '6px 12px',
+      borderRadius: 4,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap' as const,
+      transition: 'background 0.15s',
+      marginLeft: 'auto',
+    },
     loadingMsg: {
       color: '#fff',
       fontSize: 14,
@@ -925,6 +1111,18 @@ export default function BoardView() {
             </div>
           )}
         </div>
+        <button
+          style={styles.archiveBtn}
+          onClick={() => setShowArchive(true)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.35)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+          }}
+        >
+          Archive
+        </button>
       </div>
 
       {error && <div style={styles.errorMsg}>{error}</div>}
@@ -1038,6 +1236,15 @@ export default function BoardView() {
           onClose={() => setSelectedCard(null)}
           onCardUpdated={handleCardUpdated}
           onCardArchived={handleCardArchived}
+        />
+      )}
+
+      {/* Archive panel */}
+      {showArchive && boardId && (
+        <ArchivePanel
+          boardId={boardId}
+          onRestore={handleArchiveRestore}
+          onClose={() => setShowArchive(false)}
         />
       )}
     </div>

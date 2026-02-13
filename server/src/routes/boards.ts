@@ -359,6 +359,51 @@ router.get(
 );
 
 // ------------------------------------------------------------------ //
+//  GET /:boardId/archived-cards  -  list archived cards for a board   //
+// ------------------------------------------------------------------ //
+
+router.get(
+  '/:boardId/archived-cards',
+  requireBoardMembership,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { boardId } = req.params;
+
+      const result = await query(
+        `SELECT c.id, c.list_id, c.title, c.description, c.position,
+                c.due_date, c.cover_color, c.is_archived, c.created_by,
+                c.created_at, c.updated_at,
+                l.title AS list_title
+         FROM cards c
+         JOIN lists l ON l.id = c.list_id
+         WHERE l.board_id = $1 AND c.is_archived = true
+         ORDER BY c.updated_at DESC`,
+        [boardId],
+      );
+
+      const cards = result.rows.map((c) => ({
+        id: c.id,
+        listId: c.list_id,
+        title: c.title,
+        description: c.description,
+        position: c.position,
+        dueDate: c.due_date,
+        coverColor: c.cover_color,
+        isArchived: c.is_archived,
+        createdBy: c.created_by,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        listTitle: c.list_title,
+      }));
+
+      res.json(cards);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ------------------------------------------------------------------ //
 //  PUT /:boardId  -  update board (admin only)                        //
 // ------------------------------------------------------------------ //
 
