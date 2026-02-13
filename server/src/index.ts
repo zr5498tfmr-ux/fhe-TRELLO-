@@ -6,6 +6,7 @@ import path from 'path';
 import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 import { startEmailPolling } from './services/emailAutomation';
+import { startAutoArchiveScheduler } from './services/autoArchive';
 
 // Route imports
 import authRoutes from './routes/auth';
@@ -94,6 +95,9 @@ app.listen(config.port, () => {
 
   // Start email automation polling
   startEmailPolling();
+
+  // Start auto-archive scheduler
+  startAutoArchiveScheduler();
 });
 
 export default app;

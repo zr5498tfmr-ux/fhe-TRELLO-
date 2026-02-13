@@ -213,6 +213,71 @@ router.put(
 );
 
 // ------------------------------------------------------------------ //
+//  POST /:listId/archive-all-cards  -  archive every card on a list   //
+// ------------------------------------------------------------------ //
+
+router.post(
+  '/:listId/archive-all-cards',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { listId } = req.params;
+
+      await getListAndVerifyAccess(listId, req.user!.id);
+
+      const result = await query(
+        `UPDATE cards SET is_archived = true
+         WHERE list_id = $1 AND is_archived = false`,
+        [listId],
+      );
+
+      res.json({
+        message: 'All cards archived',
+        archivedCount: result.rowCount ?? 0,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ------------------------------------------------------------------ //
+//  PUT /:listId/auto-archive  -  set weekly auto-archive day          //
+// ------------------------------------------------------------------ //
+
+const autoArchiveSchema = z.object({
+  day: z.number().int().min(0).max(6).nullable(),
+});
+
+router.put(
+  '/:listId/auto-archive',
+  validate(autoArchiveSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { listId } = req.params;
+      const { day } = req.body;
+
+      await getListAndVerifyAccess(listId, req.user!.id);
+
+      await query(
+        'UPDATE lists SET auto_archive_day = $1 WHERE id = $2',
+        [day, listId],
+      );
+
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+      res.json({
+        message: day !== null
+          ? `Auto-archive set for every ${dayNames[day]}`
+          : 'Auto-archive disabled',
+        autoArchiveDay: day,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ------------------------------------------------------------------ //
 //  DELETE /:listId  -  archive list                                   //
 // ------------------------------------------------------------------ //
 

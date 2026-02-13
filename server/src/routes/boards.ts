@@ -243,7 +243,7 @@ router.get(
 
       // Lists (non-archived) with their cards
       const listsResult = await query(
-        `SELECT id, title, position
+        `SELECT id, title, position, auto_archive_day
          FROM lists
          WHERE board_id = $1 AND is_archived = false
          ORDER BY position`,
@@ -349,6 +349,7 @@ router.get(
           id: l.id,
           title: l.title,
           position: l.position,
+          autoArchiveDay: l.auto_archive_day ?? null,
           cards: cardsMap[l.id] || [],
         })),
       });

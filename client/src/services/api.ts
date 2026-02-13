@@ -227,6 +227,19 @@ export const lists = {
       method: 'DELETE',
     });
   },
+
+  archiveAllCards(listId: string): Promise<{ message: string; archivedCount: number }> {
+    return request<{ message: string; archivedCount: number }>(`/lists/${listId}/archive-all-cards`, {
+      method: 'POST',
+    });
+  },
+
+  setAutoArchive(listId: string, day: number | null): Promise<{ message: string; autoArchiveDay: number | null }> {
+    return request<{ message: string; autoArchiveDay: number | null }>(`/lists/${listId}/auto-archive`, {
+      method: 'PUT',
+      body: JSON.stringify({ day }),
+    });
+  },
 };
 
 // ------------------------------------------------------------------ //

@@ -66,6 +66,7 @@ export interface List {
   title: string;
   position: number;
   isArchived: boolean;
+  autoArchiveDay: number | null;
   cards: Card[];
 }
 

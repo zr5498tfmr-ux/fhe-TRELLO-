@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS lists (
   title VARCHAR(255) NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
   is_archived BOOLEAN DEFAULT false,
+  auto_archive_day SMALLINT CHECK (auto_archive_day IS NULL OR (auto_archive_day >= 0 AND auto_archive_day <= 6)),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -213,6 +214,19 @@ BEGIN
         EXECUTE FUNCTION update_updated_at_column();
     ', t, t, t, t);
   END LOOP;
+END;
+$$;
+
+-- Add auto_archive_day column if it does not exist (for existing databases)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'lists' AND column_name = 'auto_archive_day'
+  ) THEN
+    ALTER TABLE lists ADD COLUMN auto_archive_day SMALLINT
+      CHECK (auto_archive_day IS NULL OR (auto_archive_day >= 0 AND auto_archive_day <= 6));
+  END IF;
 END;
 $$;
 `;

@@ -409,12 +409,16 @@ function CardOverlay({ card }: { card: Card }) {
 //  Droppable List Column                                               //
 // ------------------------------------------------------------------ //
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 interface ListColumnProps {
   list: List;
   onAddCard: (listId: string, title: string) => void;
   onClickCard: (card: Card) => void;
   onEditTitle: (listId: string, title: string) => void;
   onArchiveList: (listId: string) => void;
+  onArchiveAllCards: (listId: string) => void;
+  onSetAutoArchive: (listId: string, day: number | null) => void;
 }
 
 function ListColumn({
@@ -423,16 +427,22 @@ function ListColumn({
   onClickCard,
   onEditTitle,
   onArchiveList,
+  onArchiveAllCards,
+  onSetAutoArchive,
 }: ListColumnProps) {
   const [addingCard, setAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(list.title);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
 
   const cardIds = useMemo(
     () => list.cards.filter((c) => !c.isArchived).map((c) => c.id),
     [list.cards],
   );
+
+  const activeCards = list.cards.filter((c) => !c.isArchived);
 
   const handleAddCard = () => {
     if (!newCardTitle.trim()) return;
@@ -451,6 +461,19 @@ function ListColumn({
     }
   };
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
+
   const columnStyle: React.CSSProperties = {
     background: COLORS.listBg,
     borderRadius: 8,
@@ -460,6 +483,18 @@ function ListColumn({
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
+  };
+
+  const menuItemStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 12px',
+    background: 'none',
+    border: 'none',
+    textAlign: 'left',
+    fontSize: 13,
+    color: COLORS.text,
+    cursor: 'pointer',
+    borderRadius: 4,
   };
 
   return (
@@ -472,6 +507,7 @@ function ListColumn({
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 4,
+          position: 'relative',
         }}
       >
         {editingTitle ? (
@@ -509,27 +545,127 @@ function ListColumn({
               cursor: 'pointer',
               padding: '2px 6px',
               borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
             onClick={() => setEditingTitle(true)}
           >
             {list.title}
+            {list.autoArchiveDay != null && (
+              <span
+                title={`Auto-archives every ${DAY_NAMES[list.autoArchiveDay]}`}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: COLORS.primary,
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  cursor: 'default',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {DAY_NAMES[list.autoArchiveDay].slice(0, 3)}
+              </span>
+            )}
           </div>
         )}
         <button
-          onClick={() => onArchiveList(list.id)}
-          title="Archive list"
+          onClick={() => setShowMenu(!showMenu)}
+          title="List actions"
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            fontSize: 16,
+            fontSize: 18,
             color: COLORS.textSecondary,
             padding: '2px 4px',
             lineHeight: 1,
           }}
         >
-          &times;
+          &#8943;
         </button>
+
+        {/* List menu dropdown */}
+        {showMenu && (
+          <div
+            ref={menuRef}
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: 4,
+              background: '#fff',
+              borderRadius: 6,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+              zIndex: 100,
+              width: 220,
+              padding: 4,
+            }}
+          >
+            <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, borderBottom: '1px solid #e0e0e0', marginBottom: 4 }}>
+              List Actions
+            </div>
+            <button
+              style={menuItemStyle}
+              onClick={() => {
+                setShowMenu(false);
+                onArchiveAllCards(list.id);
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F5F7'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+            >
+              Archive all cards ({activeCards.length})
+            </button>
+            <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, borderTop: '1px solid #f0f0f0', marginTop: 4 }}>
+              Weekly Auto-Archive
+            </div>
+            {DAY_NAMES.map((name, idx) => (
+              <button
+                key={idx}
+                style={{
+                  ...menuItemStyle,
+                  fontWeight: list.autoArchiveDay === idx ? 700 : 400,
+                  color: list.autoArchiveDay === idx ? COLORS.primary : COLORS.text,
+                }}
+                onClick={() => {
+                  setShowMenu(false);
+                  onSetAutoArchive(list.id, list.autoArchiveDay === idx ? null : idx);
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F5F7'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                {name} {list.autoArchiveDay === idx ? '(active)' : ''}
+              </button>
+            ))}
+            {list.autoArchiveDay != null && (
+              <button
+                style={{ ...menuItemStyle, color: COLORS.danger }}
+                onClick={() => {
+                  setShowMenu(false);
+                  onSetAutoArchive(list.id, null);
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F5F7'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                Disable auto-archive
+              </button>
+            )}
+            <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 4, paddingTop: 4 }}>
+              <button
+                style={{ ...menuItemStyle, color: COLORS.danger }}
+                onClick={() => {
+                  setShowMenu(false);
+                  onArchiveList(list.id);
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F5F7'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                Archive this list
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cards area */}
@@ -910,6 +1046,44 @@ export default function BoardView() {
     }
   };
 
+  const handleArchiveAllCards = async (listId: string) => {
+    const list = board?.lists.find((l) => l.id === listId);
+    const count = list?.cards.filter((c) => !c.isArchived).length ?? 0;
+    if (count === 0) return;
+    if (!window.confirm(`Archive all ${count} card(s) in "${list?.title}"?`)) return;
+    try {
+      await listsApi.archiveAllCards(listId);
+      setBoard((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          lists: prev.lists.map((l) =>
+            l.id === listId ? { ...l, cards: [] } : l,
+          ),
+        };
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSetAutoArchive = async (listId: string, day: number | null) => {
+    try {
+      await listsApi.setAutoArchive(listId, day);
+      setBoard((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          lists: prev.lists.map((l) =>
+            l.id === listId ? { ...l, autoArchiveDay: day } : l,
+          ),
+        };
+      });
+    } catch {
+      // ignore
+    }
+  };
+
   const handleClickCard = (card: Card) => {
     setSelectedCard(card);
   };
@@ -1148,6 +1322,8 @@ export default function BoardView() {
                 onClickCard={handleClickCard}
                 onEditTitle={handleEditListTitle}
                 onArchiveList={handleArchiveList}
+                onArchiveAllCards={handleArchiveAllCards}
+                onSetAutoArchive={handleSetAutoArchive}
               />
             </SortableContext>
           ))}
