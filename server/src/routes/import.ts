@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { query } from '../db/pool';
+import { pool, query } from '../db/pool';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
@@ -59,20 +59,24 @@ router.use(authenticate);
 router.post(
   '/trello',
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const trelloData = req.body;
+    const userId = req.user!.id;
+
+    // -------------------------------------------------------------- //
+    //  Validate basic structure before acquiring a connection          //
+    // -------------------------------------------------------------- //
+
+    if (!trelloData || !trelloData.name) {
+      res.status(400).json({
+        error: 'Invalid Trello export. Make sure you uploaded the raw JSON file from Trello.',
+      });
+      return;
+    }
+
+    const client = await pool.connect();
+
     try {
-      const trelloData = req.body;
-      const userId = req.user!.id;
-
-      // ------------------------------------------------------------ //
-      //  Validate basic structure                                      //
-      // ------------------------------------------------------------ //
-
-      if (!trelloData || !trelloData.name) {
-        res.status(400).json({
-          error: 'Invalid Trello export. Make sure you uploaded the raw JSON file from Trello.',
-        });
-        return;
-      }
+      await client.query('BEGIN');
 
       const boardName = trelloData.name || 'Imported Board';
       const boardDesc = trelloData.desc || null;
@@ -81,7 +85,7 @@ router.post(
       //  1. Create the board                                           //
       // ------------------------------------------------------------ //
 
-      const boardResult = await query(
+      const boardResult = await client.query(
         `INSERT INTO boards (title, description, background_color, created_by)
          VALUES ($1, $2, $3, $4)
          RETURNING id`,
@@ -90,7 +94,7 @@ router.post(
       const boardId = boardResult.rows[0].id;
 
       // Add the importing user as admin
-      await query(
+      await client.query(
         `INSERT INTO board_members (board_id, user_id, role)
          VALUES ($1, $2, 'admin')`,
         [boardId, userId],
@@ -108,7 +112,7 @@ router.post(
 
       for (let i = 0; i < trelloLists.length; i++) {
         const tl = trelloLists[i];
-        const listResult = await query(
+        const listResult = await client.query(
           `INSERT INTO lists (board_id, title, position, is_archived)
            VALUES ($1, $2, $3, $4)
            RETURNING id`,
@@ -131,7 +135,7 @@ router.post(
         const name = tl.name || null;
         const color = trelloColorToHex(tl.color);
 
-        const labelResult = await query(
+        const labelResult = await client.query(
           `INSERT INTO labels (board_id, name, color)
            VALUES ($1, $2, $3)
            RETURNING id`,
@@ -172,7 +176,7 @@ router.post(
         const dueDate = tc.due || null;
         const isArchived = tc.closed === true;
 
-        const cardResult = await query(
+        const cardResult = await client.query(
           `INSERT INTO cards (list_id, title, description, position, due_date, is_archived, created_by)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id`,
@@ -199,7 +203,7 @@ router.post(
           const trelloLabelId = typeof cl === 'string' ? cl : cl.id;
           const ourLabelId = labelIdMap[trelloLabelId];
           if (ourLabelId) {
-            await query(
+            await client.query(
               `INSERT INTO card_labels (card_id, label_id)
                VALUES ($1, $2)
                ON CONFLICT (card_id, label_id) DO NOTHING`,
@@ -220,7 +224,7 @@ router.post(
         const ourCardId = cardIdMap[tcl.idCard];
         if (!ourCardId) continue;
 
-        const clResult = await query(
+        const clResult = await client.query(
           `INSERT INTO checklists (card_id, title, position)
            VALUES ($1, $2, $3)
            RETURNING id`,
@@ -235,7 +239,7 @@ router.post(
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
-          await query(
+          await client.query(
             `INSERT INTO checklist_items (checklist_id, content, is_checked, position)
              VALUES ($1, $2, $3, $4)`,
             [
@@ -249,8 +253,10 @@ router.post(
       }
 
       // ------------------------------------------------------------ //
-      //  6. Return summary                                             //
+      //  6. Commit and return summary                                  //
       // ------------------------------------------------------------ //
+
+      await client.query('COMMIT');
 
       res.status(201).json({
         message: 'Trello board imported successfully',
@@ -265,7 +271,10 @@ router.post(
         },
       });
     } catch (err) {
+      await client.query('ROLLBACK');
       next(err);
+    } finally {
+      client.release();
     }
   },
 );
