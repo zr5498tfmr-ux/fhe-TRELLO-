@@ -47,8 +47,9 @@ services:
       db:
         condition: service_healthy
 
-  # ── Cloudflare Tunnel (free HTTPS, no port forwarding needed) ───────
-  # Remove this service if you only need local network access
+  # ── Cloudflare Named Tunnel (permanent URL via your domain) ─────────
+  # Requires domain added to Cloudflare + a tunnel token in .env
+  # Start with: docker compose --profile tunnel up -d tunnel
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: always
@@ -59,6 +60,19 @@ services:
       - app
     profiles:
       - tunnel
+
+  # ── Cloudflare Quick Tunnel (temporary URL, no domain needed) ───────
+  # Gives a random *.trycloudflare.com URL — great for testing.
+  # URL appears in the logs: docker compose logs tunnel-quick
+  # Start with: docker compose --profile quick-tunnel up -d tunnel-quick
+  tunnel-quick:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://app:8080
+    depends_on:
+      - app
+    profiles:
+      - quick-tunnel
 
   # ── Automated daily database backups ─────────────────────────────────
   db-backup:
