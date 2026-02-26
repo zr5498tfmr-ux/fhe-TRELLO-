@@ -786,7 +786,7 @@ function ListColumn({
 // ------------------------------------------------------------------ //
 
 export default function BoardView() {
-  const { id: boardId } = useParams<{ id: string }>();
+  const { boardId } = useParams<{ boardId: string }>();
 
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
